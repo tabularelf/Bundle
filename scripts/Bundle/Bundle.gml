@@ -7,6 +7,7 @@ function Bundle(_filepath) constructor {
 	__filename = _filepath;
 	__parsed = false;
 	__entriesNewList = undefined;
+	__entriesNewMap = undefined;
 	__entriesList = undefined;
 	__entriesMap = undefined;
 	__folderMap = undefined;
@@ -16,6 +17,19 @@ function Bundle(_filepath) constructor {
 	__buffer = -1;
 	__loaded = false;
 	__includeFolderMap = false;
+	__timestamp = -1;
+	__headerCrc32 = -1;
+	__bufferCrc32 = -1;
+	
+	static Crc32Match = function() {
+		if (!__loaded) Load();
+		if (!__parsed) __Parse();
+		return __headerCrc32 == __bufferCrc32;
+	}
+	
+	static GetTimestamp = function() {
+		return __timestamp;	
+	}
 	
 	static SetFilename = function(_filename) {
 		if (__filename == _filename) return self;
@@ -83,6 +97,7 @@ function Bundle(_filepath) constructor {
 	static Begin = function() {
 		__building = true;
 		if (!is_array(__entriesNewList)) __entriesNewList = [];
+		if (!is_struct(__entriesNewMap)) __entriesNewMap = {};
 		return self;
 	}
 	
@@ -99,6 +114,11 @@ function Bundle(_filepath) constructor {
 		var _newBuffer;
 		var _compressedSize = 0; 
 		var _uncompressedSize = _size;
+		var _crc32 = buffer_crc32(_buffer, _offset, _size);
+		
+		if (variable_struct_exists(__entriesNewMap, _filename)) {
+			show_error("File \""+_filename+"\" already exists!", true);	
+		}
 		
 		if (_compressed) {
 			_newBuffer = buffer_compress(_buffer, _offset, _size);
@@ -110,13 +130,13 @@ function Bundle(_filepath) constructor {
 				_compressedSize = 0;
 				_compressed = false;
 			}
-			
 		} else {
 			_newBuffer = buffer_create(_size, buffer_fixed, 1);
 			buffer_copy(_buffer, _offset, _size, _newBuffer, 0);
 		}
-		var _entry = new __BundleEntry(_filename, _hash, _compressedSize, _uncompressedSize, _compressed, _newBuffer);
+		var _entry = new __BundleEntry(_filename, _crc32, _compressedSize, _uncompressedSize, _compressed, _newBuffer);
 		array_push(__entriesNewList, _entry);
+		__entriesNewMap[$ _filename] = _entry;
 		return self;
 	}	
 	
@@ -129,9 +149,12 @@ function Bundle(_filepath) constructor {
 		return self;
 	}
 	
-	static GetFileAsBuffer = function(_filename) {
+	static LoadFileAsBuffer = function(_filename) {
 		if (!__parsed) __Parse();
 		var _name = is_struct(_filename) ? _filename.filepath + _filename.name : _filename;
+		if (!variable_struct_exists(__entriesMap, _name)) {
+			show_error("File \"" + _name + "\" doesn't exist!", true);	
+		}
 		var _entry = __entriesMap[$ _name];
 		var _size = _entry.__compressed ? _entry.__compressedSize : _entry.__uncompressedSize;
 		var _buff = buffer_create(_size, buffer_fixed, 1);
@@ -153,7 +176,7 @@ function Bundle(_filepath) constructor {
 		if (string_pos(".", _ext) == 1) {
 			_ext = string_delete(_ext, 1, 1);
 		}
-		var _buff = GetFileAsBuffer(_name);
+		var _buff = LoadFileAsBuffer(_name);
 		if (variable_struct_exists(_global.formats, _ext)) {
 			var _result = _global.formats[$ _ext].callback(_buff);
 			if (_global.formats[$ _ext].autoConsume) {
@@ -172,7 +195,7 @@ function Bundle(_filepath) constructor {
 			compressedSize: _entry.__compressedSize,
 			uncompressedSize: _entry.__uncompressedSize,
 			compressed: _entry.__compressed,
-			hash: _entry.__hash,
+			crc32: _entry.__crc32,
 			filepath: string_count("/", string_replace_all(_filename, "\\", "/")) > 0 ? filename_path(_filename) : ""
 		}
 	}
@@ -187,6 +210,15 @@ function Bundle(_filepath) constructor {
 		__UpdateBundle();
 	}
 	
+	static __WriteEntryInfo = function(_buff, _entry, _pos) {
+		buffer_write(_buff, buffer_string, _entry.__name);
+		buffer_write(_buff, buffer_u32, _entry.__crc32);
+		buffer_write(_buff, buffer_u32, _entry.__compressedSize);
+		buffer_write(_buff, buffer_u32, _entry.__uncompressedSize);
+		buffer_write(_buff, buffer_u32, _pos); // Current position of databuff
+		buffer_write(_buff, buffer_bool, _entry.__compressed);	
+	}
+	
 	static __UpdateBundle = function() {
 		// Check if any files were added!
 		if (array_length(__entriesNewList) == 0) return; 
@@ -197,34 +229,6 @@ function Bundle(_filepath) constructor {
 			buffer_write(_dataBuff, buffer_string, __BUNDLE_HEADER);
 			var _dataBuffPos = buffer_tell(_dataBuff);
 			var _entriesBuff = buffer_create(1, buffer_grow, 1);
-			
-			var _i = 0;
-			repeat(array_length(__entriesNewList)) {
-				var _entry = __entriesNewList[_i];
-				
-				buffer_write(_entriesBuff, buffer_string, _entry.__name);
-				buffer_write(_entriesBuff, buffer_string, _entry.__hash);
-				buffer_write(_entriesBuff, buffer_u32, _entry.__compressedSize);
-				buffer_write(_entriesBuff, buffer_u32, _entry.__uncompressedSize);
-				buffer_write(_entriesBuff, buffer_u32, _dataBuffPos); // Current position of databuff
-				buffer_write(_entriesBuff, buffer_bool, _entry.__compressed);
-				var _size = buffer_get_size(_entry.__buffer);
-				buffer_copy(_entry.__buffer, 0, _size, _dataBuff, _dataBuffPos);
-				_dataBuffPos += _size+1;
-				
-				++_i;
-			}
-			
-			var _entriesSize = buffer_tell(_entriesBuff);
-			buffer_copy(_entriesBuff, 0, _entriesSize, _dataBuff, _dataBuffPos);
-			var _size = buffer_get_size(_dataBuff);
-			buffer_seek(_dataBuff, buffer_seek_end, 0);
-			buffer_write(_dataBuff, buffer_u8, __BUNDLE_VERSION);
-			buffer_write(_dataBuff, buffer_u32, _entriesSize);
-			buffer_write(_dataBuff, buffer_u32, _entriesCount);
-			buffer_resize(_dataBuff, buffer_tell(_dataBuff));
-			buffer_delete(_entriesBuff);
-			__buffer = _dataBuff;
 		} else {
 			var _size = buffer_get_size(__buffer)-__entriesSize-9;
 			var _dataBuff = buffer_create(_size, buffer_grow, 1);
@@ -233,40 +237,47 @@ function Bundle(_filepath) constructor {
 			var _entriesBuff = buffer_create(__entriesSize, buffer_grow, 1);
 			buffer_copy(__buffer, _size, __entriesSize, _entriesBuff, 0);
 			buffer_seek(_entriesBuff, buffer_seek_end, 0);
-			
-			var _i = 0;
-			repeat(array_length(__entriesNewList)) {
-				var _entry = __entriesNewList[_i];
-				
-				buffer_write(_entriesBuff, buffer_string, _entry.__name);
-				buffer_write(_entriesBuff, buffer_string, _entry.__hash);
-				buffer_write(_entriesBuff, buffer_u32, _entry.__compressedSize);
-				buffer_write(_entriesBuff, buffer_u32, _entry.__uncompressedSize);
-				buffer_write(_entriesBuff, buffer_u32, _dataBuffPos); // Current position of databuff
-				buffer_write(_entriesBuff, buffer_bool, _entry.__compressed);
-				var _size = buffer_get_size(_entry.__buffer);
-				buffer_copy(_entry.__buffer, 0, _size, _dataBuff, _dataBuffPos);
-				_dataBuffPos += _size+1;
-				
-				++_i;
-			}
-			
-			var _entriesSize = buffer_tell(_entriesBuff);
-			buffer_copy(_entriesBuff, 0, _entriesSize, _dataBuff, _dataBuffPos);
-			var _size = buffer_get_size(_dataBuff);
-			buffer_seek(_dataBuff, buffer_seek_end, 0);
-			buffer_write(_dataBuff, buffer_u8, __BUNDLE_VERSION);
-			buffer_write(_dataBuff, buffer_u32, _entriesSize);
-			buffer_write(_dataBuff, buffer_u32, _entriesCount);
-			buffer_resize(_dataBuff, buffer_tell(_dataBuff));
-			buffer_delete(_entriesBuff);
-			buffer_delete(__buffer);
-			Reset();
-			__buffer = _dataBuff;
 		}
+		
+		var _t = date_current_datetime();
+		var _i = 0;
+		repeat(array_length(__entriesNewList)) {
+			var _entry = __entriesNewList[_i];
+			
+			__WriteEntryInfo(_entriesBuff, _entry, _dataBuffPos);
+			var _size = buffer_get_size(_entry.__buffer);
+			buffer_copy(_entry.__buffer, 0, _size, _dataBuff, _dataBuffPos);
+			buffer_delete(_entry.__buffer);
+			_dataBuffPos += _size+1;
+			
+			++_i;
+		}
+		
+					
+		var _entriesSize = buffer_tell(_entriesBuff);
+		buffer_copy(_entriesBuff, 0, _entriesSize, _dataBuff, _dataBuffPos);
+		var _size = buffer_get_size(_dataBuff);
+		buffer_seek(_dataBuff, buffer_seek_end, 0);
+		buffer_write(_dataBuff, buffer_u8, __BUNDLE_VERSION);
+		buffer_write(_dataBuff, buffer_u32, _entriesSize);
+		buffer_write(_dataBuff, buffer_u32, _entriesCount);
+		var _datetime = date_current_datetime();
+		buffer_write(_dataBuff, buffer_f64, _datetime);
+		buffer_resize(_dataBuff, buffer_tell(_dataBuff));
+		var _crc32 = buffer_crc32(_dataBuff, 0, buffer_get_size(_dataBuff));
+		buffer_seek(_dataBuff, buffer_seek_end, 0);
+		buffer_write(_dataBuff, buffer_u32, _crc32);
+		buffer_resize(_dataBuff, buffer_tell(_dataBuff));
+		buffer_delete(_entriesBuff);
+		buffer_delete(__buffer);
+		buffer_seek(_dataBuff, buffer_seek_start, 0);
+		Reset();
+		__buffer = _dataBuff;
+		
 		__entriesCount = _entriesCount;
 		__entriesSize = _entriesSize;
 		__parsed = false;
+		show_debug_message("Time taken to build: " + string(date_second_span(_t, date_current_datetime())) + " seconds!");
 	}
 	
 	static __HandleLoad = function(_buffer) {
@@ -285,20 +296,23 @@ function Bundle(_filepath) constructor {
 		var _header = buffer_read(__buffer, buffer_string);
 		if (_header != __BUNDLE_HEADER) show_error("Invalid header!", true);
 		
-		buffer_seek(__buffer, buffer_seek_end, 9);
+		buffer_seek(__buffer, buffer_seek_end, 21);
 		__version = buffer_read(__buffer, buffer_u8);
 		__entriesSize = buffer_read(__buffer, buffer_u32);
 		__entriesCount = buffer_read(__buffer, buffer_u32);
-		buffer_seek(__buffer, buffer_seek_end, 9+__entriesSize);
+		__timestamp = buffer_read(__buffer, buffer_f64);
+		__headerCrc32 = buffer_read(__buffer, buffer_u32);
+		__bufferCrc32 = buffer_crc32(__buffer, 0, buffer_get_size(__buffer)-4);
+		buffer_seek(__buffer, buffer_seek_end, 21+__entriesSize);
 		var _i = 0;
 		repeat(__entriesCount) {
 			var _name = buffer_read(__buffer, buffer_string);
-			var _hash = buffer_read(__buffer, buffer_string);
+			var _crc32 = buffer_read(__buffer, buffer_u32);
 			var _compressedSize = buffer_read(__buffer, buffer_u32);
 			var _uncompressedSize = buffer_read(__buffer, buffer_u32);
 			var _filePos = buffer_read(__buffer, buffer_u32);
 			var _isCompressed = buffer_read(__buffer, buffer_bool);
-			var _entry = new __BundleEntry(_name, _hash, _compressedSize, _uncompressedSize, _isCompressed);
+			var _entry = new __BundleEntry(_name, _crc32, _compressedSize, _uncompressedSize, _isCompressed);
 			_entry.__pos = _i;
 			_entry.__filePos = _filePos;
 			array_push(__entriesList, _entry);
@@ -354,9 +368,9 @@ function __BundleSystem() {
 	return _inst;
 }
 
-function __BundleEntry(_name, _hash, _cbuffSize, _buffSize, _compressed, _buff = -1) constructor {
+function __BundleEntry(_name, _crc32, _cbuffSize, _buffSize, _compressed, _buff = -1) constructor {
 	__name = _name;
-	__hash = _hash;
+	__crc32 = _crc32;
 	__buffer = _buff;
 	__compressedSize = _cbuffSize;
 	__uncompressedSize = _buffSize;

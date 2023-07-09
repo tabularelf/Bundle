@@ -41,6 +41,7 @@
     {"resourceType":"GMIncludedFile","resourceVersion":"1.0","name":"bunnyloaf.jpg","CopyToMask":-1,"filePath":"datafiles/.bundleinfo",},
     {"resourceType":"GMIncludedFile","resourceVersion":"1.0","name":"test2.json","CopyToMask":-1,"filePath":"datafiles/test",},
     {"resourceType":"GMIncludedFile","resourceVersion":"1.0","name":"test2.json","CopyToMask":-1,"filePath":"datafiles/test/test 2",},
+    {"resourceType":"GMIncludedFile","resourceVersion":"1.0","name":"Untitled.png","CopyToMask":-1,"filePath":"datafiles",},
   ],
   "MetaData": {
     "IDEVersion": "2022.0.1.31",
