@@ -15,6 +15,7 @@ function Bundle(_filepath) constructor {
 	__version = -1;
 	__buffer = -1;
 	__loaded = false;
+	__includeFolderMap = false;
 	
 	static SetFilename = function(_filename) {
 		if (__filename == _filename) return self;
@@ -278,7 +279,7 @@ function Bundle(_filepath) constructor {
 		if (__parsed) return;
 		if (__entriesList == undefined) __entriesList = [];
 		if (__entriesMap == undefined) __entriesMap = {};
-		if (__folderMap == undefined) __folderMap = {};
+		if (__includeFolderMap) && (__folderMap == undefined) __folderMap = {};
 		
 		buffer_seek(__buffer, buffer_seek_start, 0);
 		var _header = buffer_read(__buffer, buffer_string);
@@ -303,7 +304,8 @@ function Bundle(_filepath) constructor {
 			array_push(__entriesList, _entry);
 			__entriesMap[$ _name] = _entry;
 			// Early rejection
-			if (string_copy(_name, 1, 11) != ".bundleinfo") {
+			if (__includeFolderMap) && (string_copy(_name, 1, 11) != ".bundleinfo") {
+			var _filepath = string_replace_all(string_replace_all(_name, ".", "_"), " ", "_");
 			// Replace backslashes with forward slashes for paths
 			var _path = string_replace_all(_name, "\\", "/");
 			var _slashCount = string_count("/", _path);
@@ -314,6 +316,7 @@ function Bundle(_filepath) constructor {
 				var _currentFolder = __folderMap;
 				repeat(_slashCount) {
 					var _folder = string_copy(_path, _pos, _lastPos-_pos);
+					_folder = string_replace_all(string_replace_all(filename_name(_folder), ".", "_"), " ", "_")
 					if (!variable_struct_exists(_currentFolder, _folder)) {
 						_currentFolder[$ _folder] = {}; 
 					}
@@ -323,9 +326,9 @@ function Bundle(_filepath) constructor {
 					_lastPos = string_pos_ext("/", _path, _pos+1);
 					++_ii;
 				}
-					_currentFolder[$ string_replace_all(filename_name(_name), ".", "_")] = GetEntryInfo(_name);
+					_currentFolder[$ filename_name(_filepath)] = GetEntryInfo(_name);
 				} else {
-					__folderMap[$ string_replace_all(filename_name(_name), ".", "_")] = GetEntryInfo(_name);
+					__folderMap[$ filename_name(_filepath)] = GetEntryInfo(_name);
 				}
 				++_i;
 			}
