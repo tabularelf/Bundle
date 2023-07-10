@@ -1,7 +1,7 @@
 {
   "resourceType": "GMScript",
   "resourceVersion": "1.0",
-  "name": "Bundle",
+  "name": "BundleAddFormat",
   "isDnD": false,
   "isCompatibility": false,
   "parent": {

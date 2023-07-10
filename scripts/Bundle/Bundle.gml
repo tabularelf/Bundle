@@ -1,6 +1,14 @@
 #macro __BUNDLE_VERSION 0
 #macro __BUNDLE_HEADER "BUN"
+enum __BundleAsync {
+	NONE,
+	LOADING,
+	SAVING
+}
 
+/// @function Bundle
+/// @param {String} filepath to bundle, existing or not.
+/// @feather ignore all
 function Bundle(_filepath) constructor {
 	static _global = __BundleSystem();
 	__building = false;
@@ -15,29 +23,38 @@ function Bundle(_filepath) constructor {
 	__entriesSize = 0;
 	__version = -1;
 	__buffer = -1;
+	__tempBuffer = -1;
+	__asyncID = -1;
 	__loaded = false;
+	__asyncMode = __BundleAsync.NONE;
+	__asyncCallback = undefined;
 	__includeFolderMap = false;
 	__timestamp = -1;
 	__headerCrc32 = -1;
 	__bufferCrc32 = -1;
+	__hash = "";
 	
+	/// @self Bundle
 	static Crc32Match = function() {
 		if (!__loaded) Load();
 		if (!__parsed) __Parse();
 		return __headerCrc32 == __bufferCrc32;
 	}
 	
+	/// @self Bundle
 	static GetTimestamp = function() {
 		return __timestamp;	
 	}
 	
+	/// @self Bundle
 	static SetFilename = function(_filename) {
 		if (__filename == _filename) return self;
 		__filename = _filename;
-		Reset();
+		__Reload();
 		return self;
 	}
 	
+	/// @self Bundle
 	static Unload = function() {
 		if (!__loaded) return self;
 		
@@ -51,7 +68,8 @@ function Bundle(_filepath) constructor {
 		return self;
 	}
 	
-	static Reset = function() {
+	/// @self Bundle
+	static __Reload = function() {
 		__parsed = false;
 		__EntriesMap = undefined;
 		__folderMap = undefined;
@@ -76,17 +94,66 @@ function Bundle(_filepath) constructor {
 		return self;
 	}
 	
-	static LoadAsync = function() {
-		
-		return self;
+	static LoadAsync = function(_callback = undefined) {
+		if (__loaded) return -1;
+		__asyncMode = __BundleAsync.LOADING;
+		__tempBuffer = buffer_create(1, buffer_grow, 1);
+		var _id = buffer_load_async(__tempBuffer, __filename, 0, -1);
+		__asyncID = _id;
+		__asyncCallback = _callback;
 	}
 	
 	static Save = function() {
 		buffer_save(__buffer, __filename);
 	}
 	
-	static SaveAsync = function() {
+	static SaveAsync = function(_callback = undefined) {
+		if ((__asyncMode != __BundleAsync.NONE) && (!__loaded)) show_error("Bad!", true);
 		
+		__asyncMode = __BundleAsync.SAVING;
+		var _size = buffer_get_size(__buffer);
+		__tempBuffer = buffer_create(_size, buffer_fixed, 1);
+		buffer_copy(__buffer, 0, _size, __tempBuffer, 0);
+		var _id = buffer_save_async(__tempBuffer, __filename, 0, _size);
+		__asyncID = _id;
+		__asyncCallback = _callback;
+	}
+	
+	static HandleAsync = function(_id = async_load[? "id"]) {
+		if (_id == __asyncID) {
+			var _result = 0;
+			if (__asyncMode == __BundleAsync.LOADING) {
+				if (async_load[? "status"]) {
+					__buffer = __tempBuffer;
+					__loaded = true;
+					_result = 1;
+					__Parse();
+				} else {
+					buffer_delete(__tempBuffer);	
+					__loaded = false;
+				}
+				
+				__asyncMode = __BundleAsync.NONE;
+				__tempBuffer = -1;
+				__asyncID = -1;
+			} else if (__asyncMode == __BundleAsync.SAVING) {
+				if (async_load[? "status"]) {
+					_result = 1;
+				}
+				
+				__asyncMode = __BundleAsync.NONE;
+				buffer_delete(__tempBuffer);
+				__tempBuffer = -1;
+				__asyncID = -1;
+			}
+			
+			if (_result) && (__asyncCallback != undefined) {
+				__asyncCallback();
+				__asyncCallback = undefined;	
+			}
+			return _result;
+		}
+		return -1;
 	}
 	
 	
@@ -134,7 +201,7 @@ function Bundle(_filepath) constructor {
 			_newBuffer = buffer_create(_size, buffer_fixed, 1);
 			buffer_copy(_buffer, _offset, _size, _newBuffer, 0);
 		}
-		var _entry = new __BundleEntry(_filename, _crc32, _compressedSize, _uncompressedSize, _compressed, _newBuffer);
+		var _entry = new __BundleEntryClass(_filename, _crc32, _compressedSize, _uncompressedSize, _compressed, _newBuffer);
 		array_push(__entriesNewList, _entry);
 		__entriesNewMap[$ _filename] = _entry;
 		return self;
@@ -239,7 +306,8 @@ function Bundle(_filepath) constructor {
 			buffer_seek(_entriesBuff, buffer_seek_end, 0);
 		}
 		
-		var _t = date_current_datetime();
+		var _timestamp = date_current_datetime();
+		var _t = get_timer();
 		var _i = 0;
 		repeat(array_length(__entriesNewList)) {
 			var _entry = __entriesNewList[_i];
@@ -271,13 +339,13 @@ function Bundle(_filepath) constructor {
 		buffer_delete(_entriesBuff);
 		buffer_delete(__buffer);
 		buffer_seek(_dataBuff, buffer_seek_start, 0);
-		Reset();
+		__Reload();
 		__buffer = _dataBuff;
 		
 		__entriesCount = _entriesCount;
 		__entriesSize = _entriesSize;
 		__parsed = false;
-		show_debug_message("Time taken to build: " + string(date_second_span(_t, date_current_datetime())) + " seconds!");
+		show_debug_message("Time taken to build: " + string((get_timer() - _t) / 1000) + "ms (" + string_format(date_second_span(_timestamp, date_current_datetime()), 0, 0) + " seconds!)");
 	}
 	
 	static __HandleLoad = function(_buffer) {
@@ -287,10 +355,12 @@ function Bundle(_filepath) constructor {
 	}
 	
 	static __Parse = function() {
-		if (__parsed) return;
+		var _hash = buffer_sha1(__buffer, 0, buffer_get_size(__buffer));
+		if (__parsed) && (__hash == _hash) return;
 		if (__entriesList == undefined) __entriesList = [];
 		if (__entriesMap == undefined) __entriesMap = {};
 		if (__includeFolderMap) && (__folderMap == undefined) __folderMap = {};
+		__hash = _hash;
 		
 		buffer_seek(__buffer, buffer_seek_start, 0);
 		var _header = buffer_read(__buffer, buffer_string);
@@ -312,7 +382,7 @@ function Bundle(_filepath) constructor {
 			var _uncompressedSize = buffer_read(__buffer, buffer_u32);
 			var _filePos = buffer_read(__buffer, buffer_u32);
 			var _isCompressed = buffer_read(__buffer, buffer_bool);
-			var _entry = new __BundleEntry(_name, _crc32, _compressedSize, _uncompressedSize, _isCompressed);
+			var _entry = new __BundleEntryClass(_name, _crc32, _compressedSize, _uncompressedSize, _isCompressed);
 			_entry.__pos = _i;
 			_entry.__filePos = _filePos;
 			array_push(__entriesList, _entry);
@@ -350,31 +420,3 @@ function Bundle(_filepath) constructor {
 		__parsed = true;
 	}
 }
-
-function BundleAddFormat(_ext, _callback, _autoConsume = true) {
-	static _global = __BundleSystem();	
-	_global.formats[$ string_lower(_ext)] = {
-		autoConsume: _autoConsume,
-		callback: _callback
-	};
-}
-
-function __BundleSystem() {
-	static _inst = {
-		bundles: [],
-		formats: {}
-	}
-	
-	return _inst;
-}
-
-function __BundleEntry(_name, _crc32, _cbuffSize, _buffSize, _compressed, _buff = -1) constructor {
-	__name = _name;
-	__crc32 = _crc32;
-	__buffer = _buff;
-	__compressedSize = _cbuffSize;
-	__uncompressedSize = _buffSize;
-	__compressed = _compressed;
-	__pos = -1;
-	__filePos = -1;
-}	
