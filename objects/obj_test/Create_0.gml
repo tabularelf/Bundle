@@ -12,7 +12,7 @@ loopTest = function() {
 		bundle.LoadAsync(loopTest);	
 	};
 
-var _buff = buffer_load("Untitled.png");
+//var _buff = buffer_load("Untitled.png");
 
 bundle = new Bundle("test.bun");
 	if (!file_exists("test.bun")) {
