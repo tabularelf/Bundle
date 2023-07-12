@@ -7,7 +7,7 @@ enum __BundleAsync {
 }
 
 // Config
-#macro BUNDLE_CREATE_FOLDER_MAP true
+#macro BUNDLE_CREATE_FILE_MAP false
 
 /// @function Bundle
 /// @param {String} filepath to bundle, existing or not.
@@ -21,7 +21,7 @@ function Bundle(_filepath) constructor {
 	__entriesNewMap = undefined;
 	__entriesList = undefined;
 	__entriesMap = undefined;
-	__folderMap = undefined;
+	__fileMap = undefined;
 	__entriesCount = 0;
 	__entriesSize = 0;
 	__version = -1;
@@ -68,26 +68,6 @@ function Bundle(_filepath) constructor {
 		__loaded = false;
 		
 		return self;
-	}
-	
-	/// @self Bundle
-	static __Reload = function() {
-		__parsed = false;
-		__EntriesMap = undefined;
-		__folderMap = undefined;
-		
-		if (is_array(__entriesList)) array_resize(__entriesList, 0);
-		
-		if (is_array(__entriesNewList)) {
-			var _i = 0;
-			repeat(array_length(__entriesNewList)) {
-				if (buffer_exists(__entriesNewList[_i].buffer)) {
-					buffer_delete(__entriesNewList[_i].buffer);
-				}
-				++_i;
-			}
-			array_resize(__entriesNewList, 0)
-		}	
 	}
 		
 	static Load = function() {
@@ -159,8 +139,8 @@ function Bundle(_filepath) constructor {
 	}
 	
 	
-	static GetFolderMap = function() {
-		return __folderMap;	
+	static GetFileMap = function() {
+		return __fileMap;
 	}
 	
 	static Begin = function() {
@@ -271,14 +251,50 @@ function Bundle(_filepath) constructor {
 		}
 	}
 	
-	static GetEntryHash = function(_filename) {
-		return __entriesMap[$ _filename].__hash;		
+	static GetEntryHash = function(_file) {
+		return (is_struct(_filename) ? _file.hash : __entriesMap[$ _file].hash);		
+	}
+	
+	static GetEntryCrc32 = function(_file) {
+		return (is_struct(_filename) ? _file.crc32 : __entriesMap[$ _file].crc32);			
+	}
+	
+	static GetEntryUncompressedSize = function(_file) {
+		return (is_struct(_filename) ? _file.uncompressedSize : __entriesMap[$ _file].uncompressedSize);			
+	}
+	
+	static GetEntryCompressedSize = function(_file) {
+		return (is_struct(_filename) ? _file.compressedSize : __entriesMap[$ _file].compressedSize);			
+	}
+	
+	static GetEntryCompressedSize = function(_file) {
+		return (is_struct(_filename) ? _file.compressedSize : __entriesMap[$ _file].compressedSize);			
 	}
 	
 	
 	static End = function() {
 		__building = false;
 		__UpdateBundle();
+	}
+	
+	/// @self Bundle
+	static __Reload = function() {
+		__parsed = false;
+		__EntriesMap = undefined;
+		__fileMap = undefined;
+		
+		if (is_array(__entriesList)) array_resize(__entriesList, 0);
+		
+		if (is_array(__entriesNewList)) {
+			var _i = 0;
+			repeat(array_length(__entriesNewList)) {
+				if (buffer_exists(__entriesNewList[_i].buffer)) {
+					buffer_delete(__entriesNewList[_i].buffer);
+				}
+				++_i;
+			}
+			array_resize(__entriesNewList, 0)
+		}	
 	}
 	
 	static __WriteEntryInfo = function(_buff, _entry, _pos) {
@@ -364,7 +380,7 @@ function Bundle(_filepath) constructor {
 		if (__parsed) && (__hash == _hash) return;
 		if (__entriesList == undefined) __entriesList = [];
 		if (__entriesMap == undefined) __entriesMap = {};
-		if (BUNDLE_CREATE_FOLDER_MAP) && (__folderMap == undefined) __folderMap = {};
+		if (BUNDLE_CREATE_FILE_MAP) && (__fileMap = undefined) __fileMap = {};
 		__hash = _hash;
 		
 		buffer_seek(__buffer, buffer_seek_start, 0);
@@ -394,7 +410,7 @@ function Bundle(_filepath) constructor {
 			array_push(__entriesList, _entry);
 			__entriesMap[$ _name] = _entry;
 			// Early rejection
-			if (BUNDLE_CREATE_FOLDER_MAP) && (string_copy(_name, 1, 11) != ".bundleinfo") {
+			if (BUNDLE_CREATE_FILE_MAP) && (string_copy(_name, 1, 11) != ".bundleinfo") {
 			var _filepath = string_replace_all(string_replace_all(_name, ".", "_"), " ", "_");
 				// Replace backslashes with forward slashes for paths
 				var _path = string_replace_all(_name, "\\", "/");
@@ -403,7 +419,7 @@ function Bundle(_filepath) constructor {
 					var _ii = 0;
 					var _pos = 1;
 					var _lastPos = string_pos("/", _path);
-					var _currentFolder = __folderMap;
+					var _currentFolder = __fileMap;
 					repeat(_slashCount) {
 						var _folder = string_copy(_path, _pos, _lastPos-_pos);
 						_folder = string_replace_all(string_replace_all(filename_name(_folder), ".", "_"), " ", "_")
@@ -418,7 +434,7 @@ function Bundle(_filepath) constructor {
 					}
 					_currentFolder[$ filename_name(_filepath)] = _entry;
 				} else {
-					__folderMap[$ filename_name(_filepath)] = _entry;
+					__fileMap[$ filename_name(_filepath)] = _entry;
 				}
 					++_i;
 			}
