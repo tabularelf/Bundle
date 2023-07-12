@@ -24,10 +24,10 @@ bundle = new Bundle("test.bun");
 		bundle.AddFile("test\\test 2\\test2.json");
 		bundle.AddFile("Untitled.png");
 		bundle.AddString("hello_world.txt", _str);		
-		var _i = 0;
-		repeat(1024) {
-			bundle.AddString("hello_world.txt" + string(_i++), _str);		
-		}
+		//var _i = 0;
+		//repeat(1024) {
+		//	bundle.AddString("hello_world.txt" + string(_i++), _str);		
+		//}
 		bundle.End();
 		show_debug_message("Build time: " + string((get_timer() - _t) / 1000));
 		bundle.Save();
@@ -52,6 +52,9 @@ repeat(10) {
 	bundle.Load();
 	show_debug_message("Load time (Post-parsed): " + string((get_timer() - _t) / 1000));
 }
+var _json = json_stringify (bundle.GetFolderMap(), true);
+show_debug_message(_json +"\n\n\n");
+show_debug_message(json_stringify(bundle.LoadFile(bundle.GetFolderMap().test_json), true));
 
 //var _str = bundle.LoadFile("hello_world.txt");
 ////show_message(date_datetime_string(bundle.__datetime));

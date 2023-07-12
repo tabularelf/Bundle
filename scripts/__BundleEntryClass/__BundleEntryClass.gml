@@ -1,12 +1,13 @@
 /// @feather ignore all
 /// @ignore
-function __BundleEntryClass(_name, _crc32, _cbuffSize, _buffSize, _compressed, _buff = -1) constructor {
-	__name = _name;
-	__crc32 = _crc32;
-	__buffer = _buff;
-	__compressedSize = _cbuffSize;
-	__uncompressedSize = _buffSize;
-	__compressed = _compressed;
-	__pos = -1;
-	__filePos = -1;
+function __BundleEntryClass(_filename, _hash, _crc32, _cbuffSize, _buffSize, _compressed, _buff = -1) constructor {
+	filename = _filename;
+	hash = _hash;
+	crc32 = _crc32;
+	buffer = _buff;
+	compressedSize = _cbuffSize;
+	uncompressedSize = _buffSize;
+	compressed = _compressed;
+	pos = -1;
+	filePos = -1;
 }	
