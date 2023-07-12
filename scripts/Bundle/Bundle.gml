@@ -7,7 +7,7 @@ enum __BundleAsync {
 }
 
 // Config
-#macro BUNDLE_CREATE_FILE_MAP false
+#macro BUNDLE_CREATE_FILE_MAP true
 
 /// @function Bundle
 /// @param {String} filepath to bundle, existing or not.
@@ -203,7 +203,7 @@ function Bundle(_filepath) constructor {
 		if (!__parsed) __Parse();
 		var _entry = is_struct(_file) ? _file : __entriesMap[$ _file];
 		if (_entry == undefined) {
-			show_error("File \"" + _name + "\" doesn't exist!", true);	
+			show_error("File \"" + string(_file) + "\" doesn't exist!", true);	
 		}
 		var _size = _entry.compressed ? _entry.compressedSize : _entry.uncompressedSize;
 		var _buff = buffer_create(_size, buffer_fixed, 1);
@@ -411,7 +411,7 @@ function Bundle(_filepath) constructor {
 			__entriesMap[$ _name] = _entry;
 			// Early rejection
 			if (BUNDLE_CREATE_FILE_MAP) && (string_copy(_name, 1, 11) != ".bundleinfo") {
-			var _filepath = string_replace_all(string_replace_all(_name, ".", "_"), " ", "_");
+			var _filepath = _name;//string_replace_all(string_replace_all(_name, ".", "_"), " ", "_");
 				// Replace backslashes with forward slashes for paths
 				var _path = string_replace_all(_name, "\\", "/");
 				var _slashCount = string_count("/", _path);
@@ -422,7 +422,6 @@ function Bundle(_filepath) constructor {
 					var _currentFolder = __fileMap;
 					repeat(_slashCount) {
 						var _folder = string_copy(_path, _pos, _lastPos-_pos);
-						_folder = string_replace_all(string_replace_all(filename_name(_folder), ".", "_"), " ", "_")
 						if (!variable_struct_exists(_currentFolder, _folder)) {
 							_currentFolder[$ _folder] = {}; 
 						}
