@@ -1,11 +1,3 @@
-#macro __BUNDLE_VERSION 0
-#macro __BUNDLE_HEADER "BUN"
-enum __BundleAsync {
-	NONE,
-	LOADING,
-	SAVING
-}
-
 // Config
 #macro BUNDLE_CREATE_FILE_MAP true
 
@@ -29,7 +21,7 @@ function Bundle(_filepath) constructor {
 	__tempBuffer = -1;
 	__asyncID = -1;
 	__loaded = false;
-	__asyncMode = __BundleAsync.NONE;
+	__asyncMode = BundleAsync.NONE;
 	__asyncCallback = undefined;
 	__timestamp = -1;
 	__headerCrc32 = -1;
@@ -46,6 +38,11 @@ function Bundle(_filepath) constructor {
 	/// @self Bundle
 	static GetTimestamp = function() {
 		return __timestamp;	
+	}
+	
+	/// @self Bundle
+	static IsLoaded = function() {
+		return __loaded;	
 	}
 	
 	/// @self Bundle
@@ -66,78 +63,41 @@ function Bundle(_filepath) constructor {
 		}
 		
 		__loaded = false;
-		
-		return self;
-	}
-		
-	static Load = function() {
-		var _buff = buffer_load(__filename);
-		__HandleLoad(_buff);
-		return self;
 	}
 	
-	static LoadAsync = function(_callback = undefined) {
-		if (__loaded) return -1;
-		__asyncMode = __BundleAsync.LOADING;
-		__tempBuffer = buffer_create(1, buffer_grow, 1);
-		var _id = buffer_load_async(__tempBuffer, __filename, 0, -1);
-		__asyncID = _id;
-		__asyncCallback = _callback;
-	}
-	
-	static Save = function() {
-		buffer_save(__buffer, __filename);
-	}
-	
-	static SaveAsync = function(_callback = undefined) {
-		if ((__asyncMode != __BundleAsync.NONE) && (!__loaded)) show_error("Bad!", true);
-		
-		__asyncMode = __BundleAsync.SAVING;
-		var _size = buffer_get_size(__buffer);
-		__tempBuffer = buffer_create(_size, buffer_fixed, 1);
-		buffer_copy(__buffer, 0, _size, __tempBuffer, 0);
-		var _id = buffer_save_async(__tempBuffer, __filename, 0, _size);
-		__asyncID = _id;
-		__asyncCallback = _callback;
-	}
-	
-	static HandleAsync = function(_id = async_load[? "id"]) {
-		if (_id == __asyncID) {
-			var _result = 0;
-			if (__asyncMode == __BundleAsync.LOADING) {
-				if (async_load[? "status"]) {
-					__buffer = __tempBuffer;
-					__loaded = true;
-					_result = 1;
-					__Parse();
-				} else {
-					buffer_delete(__tempBuffer);	
-					__loaded = false;
-				}
-				
-				__asyncMode = __BundleAsync.NONE;
-				__tempBuffer = -1;
-				__asyncID = -1;
-			} else if (__asyncMode == __BundleAsync.SAVING) {
-				if (async_load[? "status"]) {
-					_result = 1;
-				}
-				
-				__asyncMode = __BundleAsync.NONE;
-				buffer_delete(__tempBuffer);
-				__tempBuffer = -1;
-				__asyncID = -1;
-			}
-			
-			if (_result) && (__asyncCallback != undefined) {
-				__asyncCallback();
-				__asyncCallback = undefined;	
-			}
-			return _result;
+	/// @self Bundle
+	static Load = function(_callback = undefined) {
+		if (__loaded) || (__asyncMode != BundleAsync.NONE) return -1;
+		if (_callback != undefined) {
+			__asyncMode = BundleAsync.LOADING;
+			__tempBuffer = buffer_create(1, buffer_grow, 1);
+			var _id = buffer_load_async(__tempBuffer, __filename, 0, -1);
+			__asyncID = _id;
+			__asyncCallback = _callback;	
+			array_push(_global.asyncList, self);
+		} else {
+			var _buff = buffer_load(__filename);
+			__HandleLoad(_buff);
 		}
-		return -1;
 	}
 	
+	static Save = function(_callback = undefined) {
+		if (!__loaded) return -1;
+		if (_callback != undefined) {
+			if ((__asyncMode != BundleAsync.NONE) && (!__loaded)) show_error("Bad!", true);
+			
+			__asyncMode = BundleAsync.SAVING;
+			var _size = buffer_get_size(__buffer);
+			__tempBuffer = buffer_create(_size, buffer_fixed, 1);
+			buffer_copy(__buffer, 0, _size, __tempBuffer, 0);
+			var _id = buffer_save_async(__tempBuffer, __filename, 0, _size);
+			__asyncID = _id;
+			__asyncCallback = _callback;
+			array_push(_global.asyncList, self);
+		} else {
+			buffer_save(__buffer, __filename);	
+		}
+	}
 	
 	static GetFileMap = function() {
 		return __fileMap;
@@ -439,5 +399,42 @@ function Bundle(_filepath) constructor {
 			}
 		}
 		__parsed = true;
+	}
+		
+	static __HandleAsync = function(_id) {
+		if (_id == __asyncID) {
+			var _result = false;
+			if (__asyncMode == BundleAsync.LOADING) {
+				if (async_load[? "status"]) {
+					__buffer = __tempBuffer;
+					__loaded = true;
+					__Parse();
+					_result = true;
+				} else {
+					buffer_delete(__tempBuffer);	
+					__loaded = false;
+				}
+				
+				__asyncMode = BundleAsync.NONE;
+				__tempBuffer = -1;
+				__asyncID = -1;
+			} else if (__asyncMode == BundleAsync.SAVING) {
+				if (!async_load[? "status"]) {
+					_result = true;
+				}
+				
+				__asyncMode = BundleAsync.NONE;
+				buffer_delete(__tempBuffer);
+				__tempBuffer = -1;
+				__asyncID = -1;
+			}
+			
+			if (_result) && (__asyncCallback != undefined) {
+				__asyncCallback();
+				__asyncCallback = undefined;	
+			}
+			return true;
+		}
+		return false;
 	}
 }

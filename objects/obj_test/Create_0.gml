@@ -7,10 +7,6 @@ BundleAddFormat("txt", function(_buff) {
 	return buffer_read(_buff, buffer_text);
 });
 
-loopTest = function() {
-		bundle.Unload();
-		bundle.LoadAsync(loopTest);	
-	};
 
 //var _buff = buffer_load("Untitled.png");
 
@@ -34,31 +30,30 @@ bundle = new Bundle("test.bun");
 		bundle.Unload();
 	}
 var _t = get_timer();
-//bundle.LoadAsync(function() {
-//	var _str = bundle.LoadFile("hello_world.txt");
-//	//show_message(date_datetime_string(bundle.__datetime));
-//	show_debug_message("\n\n\n" + json_stringify(bundle.GetEntryInfo("Untitled.png"), true));
-//	
-//	show_debug_message(bundle.Crc32Match());
-//	
-//	bundle.Unload();
-//	bundle.LoadAsync(loopTest);
-//});
-bundle.Load();
-show_debug_message("Load time (Pre-parsed): " + string((get_timer() - _t) / 1000));
-repeat(10) {
+bundle.Load(function() {
+	var _str = bundle.LoadFile("hello_world.txt");
+	//show_message(date_datetime_string(bundle.__datetime));
+	show_debug_message("\n\n\n" + json_stringify(bundle.GetEntryInfo("Untitled.png"), true));
+	
+	show_debug_message(bundle.Crc32Match());
+	show_debug_message(json_stringify(bundle.GetFileMap(), true));
 	bundle.Unload();
-	var _t = get_timer();
-	bundle.Load();
-	show_debug_message("Load time (Post-parsed): " + string((get_timer() - _t) / 1000));
-}
-var _json = json_stringify (bundle.GetFileMap(), true);
-show_debug_message(_json +"\n\n\n");
-if (bundle.GetFileMap() != undefined) {
-	show_debug_message(json_stringify(bundle.LoadFile(bundle.GetFileMap()[$ "test.json"]), true));
-} else {
-	show_debug_message(json_stringify(bundle.LoadFile("test.json"), true));	
-}
+});
+//bundle.Load();
+//show_debug_message("Load time (Pre-parsed): " + string((get_timer() - _t) / 1000));
+//repeat(10) {
+//	bundle.Unload();
+//	var _t = get_timer();
+//	bundle.Load();
+//	show_debug_message("Load time (Post-parsed): " + string((get_timer() - _t) / 1000));
+//}
+//var _json = json_stringify (bundle.GetFileMap(), true);
+//show_debug_message(_json +"\n\n\n");
+//if (bundle.GetFileMap() != undefined) {
+//	show_debug_message(json_stringify(bundle.LoadFile(bundle.GetFileMap()[$ "test.json"]), true));
+//} else {
+//	show_debug_message(json_stringify(bundle.LoadFile("test.json"), true));	
+//}
 
 //var _str = bundle.LoadFile("hello_world.txt");
 ////show_message(date_datetime_string(bundle.__datetime));
