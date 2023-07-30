@@ -10,4 +10,6 @@ function __BundleEntryClass(_filename, _hash, _crc32, _cbuffSize, _buffSize, _co
 	compressed = _compressed;
 	pos = -1;
 	filePos = -1;
+	entrySize = 0;
+	entryPos = 0;
 }	

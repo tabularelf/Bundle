@@ -7,11 +7,10 @@ BundleAddFormat("txt", function(_buff) {
 	return buffer_read(_buff, buffer_text);
 });
 
-
 //var _buff = buffer_load("Untitled.png");
 
 bundle = new Bundle("test.bun");
-	if (!file_exists("test.bun")) {
+	if (!bundle.FileExists()) {
 		var _t = get_timer();
 		var _str = string_repeat("Hello World!", 1);
 		bundle.Begin();
@@ -33,11 +32,17 @@ var _t = get_timer();
 bundle.Load(function() {
 	var _str = bundle.LoadFile("hello_world.txt");
 	//show_message(date_datetime_string(bundle.__datetime));
-	show_debug_message("\n\n\n" + json_stringify(bundle.GetEntryInfo("Untitled.png"), true));
+	show_debug_message(json_stringify(bundle.GetEntryInfo("Untitled.png"), true));
 	
 	show_debug_message(bundle.Crc32Match());
-	show_debug_message(json_stringify(bundle.GetFileMap(), true));
+	//show_debug_message(json_stringify(bundle.GetFileMap(), true));
+	show_debug_message(bundle.GetEntryCount());
+	bundle.Begin();
+	bundle.End();
 	bundle.Unload();
+	var _t = get_timer();
+	bundle.Load();
+	show_debug_message("Load time (Post-parsed): " + string((get_timer() - _t) / 1000));
 });
 //bundle.Load();
 //show_debug_message("Load time (Pre-parsed): " + string((get_timer() - _t) / 1000));
